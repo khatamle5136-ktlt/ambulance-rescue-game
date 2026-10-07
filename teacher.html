@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚑 Giáo viên - Cuộc Đua Cứu Hộ</title>
+
+<style>
+
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  font-family:Arial;
+  background:rgb(58, 41, 95);
+  color:white;
+}
+
+button,
+input{
+  font-family:inherit;
+}
+
+.container{
+  width:min(1200px,94%);
+  margin:auto;
+  padding:25px 0 50px;
+}
+
+h1{
+  margin:0;
+}
+
+.subtitle{
+  color:#8fa8c2;
+  margin-top:7px;
+}
+
+.topCard{
+  background:#101d2d;
+  border:1px solid #263d58;
+  border-radius:18px;
+  padding:20px;
+  margin-top:22px;
+}
+
+.roomRow{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.roomCode{
+  flex:1;
+  min-width:230px;
+  padding:17px;
+  background:#07101c;
+  border:1px solid #38516d;
+  border-radius:13px;
+  font-size:28px;
+  font-weight:900;
+  letter-spacing:5px;
+  color:#ffd76a;
+  text-align:center;
+}
+
+.btn{
+  border:0;
+  border-radius:13px;
+  padding:14px 20px;
+  font-size:16px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.create{
+  background:#19c355;
+  color:#04170e;
+}
+
+.start{
+  background:#3578e5;
+  color:white;
+}
+
+.reset{
+  background:#742d2d;
+  color:#fff;
+}
+
+.btn:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+.status{
+  margin-top:12px;
+  color:#91abc5;
+  line-height:1.5;
+}
+
+.error{
+  color:#ff8888;
+}
+
+.roomStatus{
+  margin-top:18px;
+  font-size:17px;
+  font-weight:800;
+}
+
+.playersTitle{
+  margin:25px 0 12px;
+  font-size:21px;
+}
+
+.teams{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:13px;
+}
+
+.teamCard{
+  background:#101d2d;
+  border:1px solid #263d58;
+  border-radius:17px;
+  padding:17px;
+  position:relative;
+}
+
+.teamCard.finished{
+  border-color:#3a765d;
+}
+
+.teamCard.dead{
+  border-color:#783636;
+}
+
+.teamHeader{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+}
+
+.teamName{
+  font-size:20px;
+  font-weight:900;
+}
+
+.rank{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#243951;
+  font-weight:900;
+}
+
+.bigScore{
+  font-size:34px;
+  font-weight:900;
+  color:#ffd76a;
+  margin:12px 0;
+}
+
+.infoRow{
+  display:flex;
+  justify-content:space-between;
+  padding:7px 0;
+  border-bottom:1px solid #1d3046;
+  color:#abc0d5;
+}
+
+.infoRow:last-child{
+  border-bottom:0;
+}
+
+.value{
+  color:white;
+  font-weight:800;
+}
+
+.progress{
+  margin-top:13px;
+  height:8px;
+  border-radius:99px;
+  overflow:hidden;
+  background:#1d2d40;
+}
+
+.progress div{
+  height:100%;
+  background:#19c37d;
+}
+
+.statusBadge{
+  display:inline-block;
+  padding:5px 9px;
+  border-radius:8px;
+  font-size:12px;
+  font-weight:800;
+  background:#263951;
+}
+
+.statusBadge.playing{
+  background:#185c43;
+}
+
+.statusBadge.finished{
+  background:#23547c;
+}
+
+.statusBadge.dead{
+  background:#672f2f;
+}
+
+.empty{
+  padding:30px;
+  text-align:center;
+  color:#718ba5;
+  background:#101d2d;
+  border-radius:15px;
+}
+
+@media(max-width:600px){
+
+  .container{
+    width:94%;
+  }
+
+  .roomCode{
+    min-width:100%;
+  }
+
+  .btn{
+    width:100%;
+  }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>🚑 Cuộc Đua Cứu Hộ</h1>
+
+  <div class="subtitle">
+    Tạo phòng và theo dõi các đội theo thời gian thực.
+  </div>
+
+
+  <!-- ================= ROOM ================= -->
+
+  <div class="topCard">
+
+    <div class="roomRow">
+
+      <div id="roomCode" class="roomCode">
+        ------
+      </div>
+
+      <button
+        id="createBtn"
+        class="btn create"
+        type="button"
+      >
+        ➕ TẠO PHÒNG
+      </button>
+
+    </div>
+
+    <div class="roomRow" style="margin-top:10px">
+
+      <button
+        id="startBtn"
+        class="btn start"
+        type="button"
+        disabled
+      >
+        ▶️ BẮT ĐẦU GAME
+      </button>
+
+      <button
+        id="resetBtn"
+        class="btn reset"
+        type="button"
+        disabled
+      >
+        🔄 RESET PHÒNG
+      </button>
+
+    </div>
+
+    <div id="status" class="status">
+      Đang kết nối Firebase...
+    </div>
+
+    <div id="roomStatus" class="roomStatus">
+      Chưa có phòng.
+    </div>
+
+  </div>
+
+
+  <!-- ================= TEAMS ================= -->
+
+  <div class="playersTitle">
+    👥 Các đội đang tham gia
+  </div>
+
+  <div id="teams" class="teams">
+
+    <div class="empty">
+      Hãy tạo phòng để bắt đầu.
+    </div>
+
+  </div>
+
+</div>
+
+
+<script type="module">
+
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+
+import {
+  getAuth,
+  signInAnonymously
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  onSnapshot,
+  getDocs,
+  deleteDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+
+/* =========================================================
+   FIREBASE
+========================================================= */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDS3ZSPvyIM34BF2aChbHYJ-izt-65rVUg",
+  authDomain: "ambulance-rescue-game-1611.firebaseapp.com",
+  projectId: "ambulance-rescue-game-1611",
+  storageBucket: "ambulance-rescue-game-1611.firebasestorage.app",
+  messagingSenderId: "645151324428",
+  appId: "1:645151324428:web:6fb3641655e504a1d57129",
+  measurementId: "G-T3TGVJF7EK"
+};
+
+const app = initializeApp(firebaseConfig);
+
+const auth = getAuth(app);
+
+const db = getFirestore(app);
+
+
+/* =========================================================
+   ELEMENTS
+========================================================= */
+
+const roomCodeEl =
+  document.getElementById("roomCode");
+
+const createBtn =
+  document.getElementById("createBtn");
+
+const startBtn =
+  document.getElementById("startBtn");
+
+const resetBtn =
+  document.getElementById("resetBtn");
+
+const statusEl =
+  document.getElementById("status");
+
+const roomStatusEl =
+  document.getElementById("roomStatus");
+
+const teamsEl =
+  document.getElementById("teams");
+
+
+/* =========================================================
+   STATE
+========================================================= */
+
+let currentUser = null;
+let currentRoom = null;
+let unsubscribeTeams = null;
+
+
+/* =========================================================
+   AUTH
+========================================================= */
+
+async function login(){
+
+  try{
+
+    const result =
+      await signInAnonymously(auth);
+
+    currentUser = result.user;
+
+    statusEl.innerHTML =
+      "🟢 Đã kết nối Firebase.";
+
+  }catch(error){
+
+    console.error(error);
+
+    statusEl.innerHTML =
+      `<div class="error">
+        ❌ Không thể đăng nhập Firebase.<br>
+        ${error.code || error.message}
+      </div>`;
+
+  }
+
+}
+
+
+/* =========================================================
+   RANDOM ROOM
+========================================================= */
+
+function generateRoomCode(){
+
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  let result = "";
+
+  for(let i=0;i<6;i++){
+
+    result +=
+      chars[Math.floor(Math.random()*chars.length)];
+
+  }
+
+  return result;
+
+}
+
+
+/* =========================================================
+   CREATE ROOM
+========================================================= */
+
+createBtn.addEventListener("click",async()=>{
+
+  if(!currentUser){
+
+    await login();
+
+  }
+
+  if(!currentUser){
+
+    return;
+
+  }
+
+  createBtn.disabled = true;
+
+  createBtn.textContent =
+    "⏳ Đang tạo...";
+
+  try{
+
+    let code = "";
+    let roomExists = true;
+
+    while(roomExists){
+
+      code = generateRoomCode();
+
+      const ref =
+        doc(db,"rooms",code);
+
+      const snap =
+        await getDoc(ref);
+
+      roomExists = snap.exists();
+
+    }
+
+    currentRoom = code;
+
+    const roomRef =
+      doc(db,"rooms",code);
+
+    await setDoc(roomRef,{
+
+      code:code,
+
+      status:"waiting",
+
+      createdAt:serverTimestamp(),
+
+      teacherUid:currentUser.uid
+
+    });
+
+    roomCodeEl.textContent = code;
+
+    startBtn.disabled = false;
+    resetBtn.disabled = false;
+
+    roomStatusEl.innerHTML =
+      `🟡 Phòng <b>${code}</b> đang chờ các đội tham gia.`;
+
+    listenTeams();
+
+  }catch(error){
+
+    console.error(error);
+
+    statusEl.innerHTML =
+      `<div class="error">
+        ❌ Không tạo được phòng.<br>
+        ${error.code || error.message}
+      </div>`;
+
+  }
+
+  createBtn.disabled = false;
+
+  createBtn.textContent =
+    "➕ TẠO PHÒNG";
+
+});
+
+
+/* =========================================================
+   LISTEN TEAMS
+========================================================= */
+
+function listenTeams(){
+
+  if(unsubscribeTeams){
+
+    unsubscribeTeams();
+
+  }
+
+  if(!currentRoom) return;
+
+  const teamsRef =
+    collection(
+      db,
+      "rooms",
+      currentRoom,
+      "teams"
+    );
+
+  unsubscribeTeams =
+    onSnapshot(
+      teamsRef,
+      snapshot=>{
+
+        const teams =
+          snapshot.docs.map(doc=>({
+            id:doc.id,
+            ...doc.data()
+          }));
+
+        renderTeams(teams);
+
+      },
+      error=>{
+
+        console.error(error);
+
+        statusEl.innerHTML =
+          `<div class="error">
+            ❌ Không thể theo dõi danh sách đội.<br>
+            ${error.message}
+          </div>`;
+
+      }
+    );
+
+}
+
+
+/* =========================================================
+   RENDER TEAMS
+========================================================= */
+
+function renderTeams(teams){
+
+  teams.sort((a,b)=>{
+
+    if((b.score || 0) !== (a.score || 0)){
+
+      return (b.score || 0) -
+             (a.score || 0);
+
+    }
+
+    return (b.stage || 0) -
+           (a.stage || 0);
+
+  });
+
+  if(teams.length === 0){
+
+    teamsEl.innerHTML =
+      `<div class="empty">
+        Chưa có đội nào tham gia.
+      </div>`;
+
+    return;
+
+  }
+
+  teamsEl.innerHTML = "";
+
+  teams.forEach((team,index)=>{
+
+    const card =
+      document.createElement("div");
+
+    let statusClass = "";
+
+    let statusText = "Đang chờ";
+
+    if(team.status === "playing"){
+
+      statusClass = "playing";
+      statusText = "Đang chơi";
+
+    }
+
+    if(team.status === "finished"){
+
+      statusClass = "finished";
+      statusText = "Hoàn thành";
+
+    }
+
+    if(
+      team.hearts <= 0 &&
+      team.status !== "finished"
+    ){
+
+      statusClass = "dead";
+      statusText = "Hết tim";
+
+    }
+
+    if(team.status === "finished"){
+
+      card.className =
+        "teamCard finished";
+
+    }else if(team.hearts <= 0){
+
+      card.className =
+        "teamCard dead";
+
+    }else{
+
+      card.className =
+        "teamCard";
+
+    }
+
+    const stage =
+      Math.min(
+        10,
+        Math.max(0,team.stage || 0)
+      );
+
+    const progress =
+      (stage / 10) * 100;
+
+    const hearts =
+      "❤️".repeat(
+        Math.max(0,team.hearts || 0)
+      ) +
+      "🖤".repeat(
+        Math.max(0,3-(team.hearts || 0))
+      );
+
+    card.innerHTML = `
+
+      <div class="teamHeader">
+
+        <div class="teamName">
+          ${escapeHTML(team.name || "Đội")}
+        </div>
+
+        <div class="rank">
+          ${index+1}
+        </div>
+
+      </div>
+
+      <div class="bigScore">
+        ⭐ ${team.score || 0}
+      </div>
+
+      <div class="infoRow">
+        <span>Chặng</span>
+        <span class="value">
+          ${stage}/10
+        </span>
+      </div>
+
+      <div class="infoRow">
+        <span>Sức khỏe</span>
+        <span class="value">
+          ${hearts}
+        </span>
+      </div>
+
+      <div class="infoRow">
+        <span>Trạng thái</span>
+        <span class="value">
+          <span class="statusBadge ${statusClass}">
+            ${statusText}
+          </span>
+        </span>
+      </div>
+
+      <div class="progress">
+        <div style="width:${progress}%"></div>
+      </div>
+
+    `;
+
+    teamsEl.appendChild(card);
+
+  });
+
+}
+
+
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
+
+function escapeHTML(text){
+
+  return String(text)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+
+}
+
+
+/* =========================================================
+   START GAME
+========================================================= */
+
+startBtn.addEventListener("click",async()=>{
+
+  if(!currentRoom) return;
+
+  startBtn.disabled = true;
+
+  try{
+
+    const roomRef =
+      doc(db,"rooms",currentRoom);
+
+    await setDoc(
+      roomRef,
+      {
+        status:"playing",
+        startedAt:serverTimestamp()
+      },
+      {
+        merge:true
+      }
+    );
+
+    roomStatusEl.innerHTML =
+      `🟢 Phòng <b>${currentRoom}</b> đang chơi.`;
+
+  }catch(error){
+
+    console.error(error);
+
+    statusEl.innerHTML =
+      `<div class="error">
+        ❌ Không thể bắt đầu game.<br>
+        ${error.message}
+      </div>`;
+
+    startBtn.disabled = false;
+
+  }
+
+});
+
+
+/* =========================================================
+   RESET ROOM
+========================================================= */
+
+resetBtn.addEventListener("click",async()=>{
+
+  if(!currentRoom){
+
+    return;
+
+  }
+
+  const ok =
+    confirm(
+      "Bạn có chắc muốn RESET phòng này?\n\nTất cả đội sẽ bị xóa."
+    );
+
+  if(!ok) return;
+
+  resetBtn.disabled = true;
+
+  try{
+
+    const teamsRef =
+      collection(
+        db,
+        "rooms",
+        currentRoom,
+        "teams"
+      );
+
+    const snapshot =
+      await getDocs(teamsRef);
+
+    for(const teamDoc of snapshot.docs){
+
+      await deleteDoc(teamDoc.ref);
+
+    }
+
+    await deleteDoc(
+      doc(db,"rooms",currentRoom)
+    );
+
+    if(unsubscribeTeams){
+
+      unsubscribeTeams();
+
+      unsubscribeTeams = null;
+
+    }
+
+    currentRoom = null;
+
+    roomCodeEl.textContent = "------";
+
+    roomStatusEl.textContent =
+      "Phòng đã được reset.";
+
+    startBtn.disabled = true;
+
+    resetBtn.disabled = true;
+
+    teamsEl.innerHTML =
+      `<div class="empty">
+        Hãy tạo phòng mới.
+      </div>`;
+
+  }catch(error){
+
+    console.error(error);
+
+    statusEl.innerHTML =
+      `<div class="error">
+        ❌ Không thể reset phòng.<br>
+        ${error.message}
+      </div>`;
+
+  }
+
+  resetBtn.disabled = false;
+
+});
+
+
+/* =========================================================
+   LOGIN ON LOAD
+========================================================= */
+
+login();
+
+</script>
+
+</body>
+</html>
