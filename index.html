@@ -144,7 +144,7 @@ button { font-family:"Times New Roman",serif; cursor:pointer; }
     <button id="startBtn" class="primary">BẮT ĐẦU NHIỆM VỤ 🚨</button>
     <button id="soundStartBtn" class="secondary" style="margin-top:10px">🔇 Bật nhạc</button>
     <p id="startError" style="color:#ff9ba2"></p>
-    <p class="small-note">Mỗi câu có 20 giây. Hãy giữ tim và chọn thẻ thật khôn ngoan!</p>
+    <p class="small-note">Mỗi câu có 30 giây. Hãy giữ tim và chọn thẻ thật khôn ngoan!</p>
   </div>
 </section>
 
@@ -161,7 +161,7 @@ button { font-family:"Times New Roman",serif; cursor:pointer; }
       <span id="scoreDisplay">⭐ 0</span>
     </div>
     <div class="timer-wrap"><div id="timerBar" class="timer-bar"></div></div>
-    <div class="timer-text">⏱️ Còn <span id="timerValue">20</span> giây</div>
+    <div class="timer-text">⏱️ Còn <span id="timerValue">30</span> giây</div>
     <div id="departureNotice" class="small-note hidden" role="status" aria-live="polite"></div>
   </header>
 
@@ -886,7 +886,7 @@ function loadQuestion(){
  $("luckyPanel").classList.add("hidden");
  $("questionCard").classList.remove("hidden");
  resetScene();
- state.locked=false;state.seconds=20;state.timerDeadline=Date.now()+20000;state.extraUsed=0;state.flipsLeft=0;
+ state.locked=false;state.seconds=30;state.timerDeadline=Date.now()+20000;state.extraUsed=0;state.flipsLeft=0;
  const departureNotice=$("departureNotice");
  if(departureNotice){departureNotice.textContent="";departureNotice.classList.add("hidden");}
  const q=questions[state.index];
