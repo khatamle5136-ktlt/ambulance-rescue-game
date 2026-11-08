@@ -803,7 +803,7 @@ const outcomes = [
 const $ = id => document.getElementById(id);
 const state = {
  team:"",score:0,hearts:3,maxHearts:3,shields:0,
- index:0,seconds:20,timer:null,timerDeadline:0,locked:false,
+ index:0,seconds:30,timer:null,timerDeadline:0,locked:false,
  sound:false,gameOver:false,extraUsed:0,flipsLeft:0,
 
  // Theo dõi thẻ đặc biệt đã sử dụng
@@ -904,7 +904,7 @@ function loadQuestion(){
 }
 function updateTimer(){
  $("timerValue").textContent=state.seconds;
- $("timerBar").style.width=(state.seconds/20*100)+"%";
+ $("timerBar").style.width=(state.seconds/30*100)+"%";
  $("timerBar").style.background=state.seconds<=5?"#ff5964":state.seconds<=9?"#ffd166":"#26c281";
 }
 function startTimer(){
@@ -916,7 +916,7 @@ function startTimer(){
   updateTimer();
   if(state.seconds<=0){
    clearTimer();state.locked=true;disableAnswers();
-   loseHeart("⏰","HẾT GIỜ! -1 TIM","Bạn đã hết 20 giây. Không được lật thẻ ở câu này.");
+   loseHeart("⏰","HẾT GIỜ! -1 TIM","Bạn đã hết 30 giây. Không được lật thẻ ở câu này.");
   }
  },250);
 }
