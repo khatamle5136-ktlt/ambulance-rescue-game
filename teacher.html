@@ -289,6 +289,15 @@ h1{
       </button>
 
       <button
+        id="finishBtn"
+        class="btn reset"
+        type="button"
+        disabled
+      >
+        🏁 KẾT THÚC GAME
+      </button>
+
+      <button
         id="resetBtn"
         class="btn reset"
         type="button"
@@ -387,6 +396,9 @@ const startBtn =
 
 const resetBtn =
   document.getElementById("resetBtn");
+
+const finishBtn =
+  document.getElementById("finishBtn");
 
 const statusEl =
   document.getElementById("status");
@@ -523,6 +535,7 @@ createBtn.addEventListener("click",async()=>{
     roomCodeEl.textContent = code;
 
     startBtn.disabled = false;
+    finishBtn.disabled = true;
     resetBtn.disabled = false;
 
     roomStatusEl.innerHTML =
@@ -735,6 +748,18 @@ function renderTeams(teams){
       </div>
 
       <div class="infoRow">
+        <span>🚪 Rời game</span>
+        <span class="value">${team.departureCount || 0} lần</span>
+      </div>
+
+      <div class="infoRow">
+        <span>⚖️ Điểm phạt</span>
+        <span class="value">-${team.departurePenalty || 0}</span>
+      </div>
+
+      ${team.departureReview ? `<div class="infoRow"><span>🚩 Lưu ý</span><span class="value" style="color:#ff9b9b">Giáo viên xem xét</span></div>` : ""}
+
+      <div class="infoRow">
         <span>Trạng thái</span>
         <span class="value">
           <span class="statusBadge ${statusClass}">
@@ -798,6 +823,7 @@ startBtn.addEventListener("click",async()=>{
       }
     );
 
+    finishBtn.disabled = false;
     roomStatusEl.innerHTML =
       `🟢 Phòng <b>${currentRoom}</b> đang chơi.`;
 
@@ -815,6 +841,32 @@ startBtn.addEventListener("click",async()=>{
 
   }
 
+});
+
+
+/* =========================================================
+   FINISH GAME
+========================================================= */
+
+finishBtn.addEventListener("click", async () => {
+  if (!currentRoom) return;
+  const ok = confirm("Kết thúc trận đấu và chốt bảng xếp hạng hiện tại?");
+  if (!ok) return;
+
+  finishBtn.disabled = true;
+  try {
+    await setDoc(doc(db, "rooms", currentRoom), {
+      status: "finished",
+      finishedAt: serverTimestamp()
+    }, { merge: true });
+    roomStatusEl.innerHTML = `🏁 Phòng <b>${currentRoom}</b> đã kết thúc. Bảng xếp hạng được chốt theo điểm hiện tại.`;
+    startBtn.disabled = true;
+    statusEl.textContent = "Đã kết thúc trận đấu.";
+  } catch (error) {
+    console.error(error);
+    statusEl.innerHTML = `<div class="error">❌ Không thể kết thúc game.<br>${escapeHTML(error.message)}</div>`;
+    finishBtn.disabled = false;
+  }
 });
 
 
@@ -878,6 +930,7 @@ resetBtn.addEventListener("click",async()=>{
       "Phòng đã được reset.";
 
     startBtn.disabled = true;
+    finishBtn.disabled = true;
 
     resetBtn.disabled = true;
 

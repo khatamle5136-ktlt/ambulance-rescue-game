@@ -162,6 +162,7 @@ button { font-family:"Times New Roman",serif; cursor:pointer; }
     </div>
     <div class="timer-wrap"><div id="timerBar" class="timer-bar"></div></div>
     <div class="timer-text">⏱️ Còn <span id="timerValue">20</span> giây</div>
+    <div id="departureNotice" class="small-note hidden" role="status" aria-live="polite"></div>
   </header>
 
   <div class="map">
@@ -223,7 +224,8 @@ import {
   onSnapshot,
   collection,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -245,6 +247,8 @@ let teamRef = null;
 let teamId = "";
 let currentRoomCode = "";
 let hasStarted = false;
+let departureCount = 0;
+let departureEventPending = false;
 
 try {
   await signInAnonymously(auth);
@@ -254,6 +258,21 @@ try {
   document.getElementById("startError").textContent =
     "Không thể kết nối Firebase. Hãy tải lại trang và thử lại.";
 }
+
+// Kiểm tra thẻ Phá hoại được đội khác áp dụng; chỉ kích hoạt một lần.
+window.checkSabotageStatus = async function () {
+  if (!teamRef) return false;
+  try {
+    const snap = await getDoc(teamRef);
+    if (!snap.exists() || !snap.data().sabotagePending) return false;
+    await updateDoc(teamRef, { sabotagePending: false, updatedAt: serverTimestamp() });
+    state.sabotagePending = false;
+    return true;
+  } catch (error) {
+    console.error("Không kiểm tra được trạng thái phá hoại:", error);
+    return false;
+  }
+};
 
 window.joinRoom = async function () {
   const code = document
@@ -318,6 +337,7 @@ window.joinRoom = async function () {
     }
 
     currentRoomCode = code;
+    departureCount = 0;
 
     // Tạo mã riêng cho đội trong phòng.
     teamId = auth.currentUser.uid;
@@ -327,22 +347,13 @@ window.joinRoom = async function () {
       teamName: teamName,
       name: teamName,
       score: 0,
-      hearts: 2,
+      hearts: 3,
       stage: 0,
       status: "waiting",
+      departureCount: 0,
+      departurePenalty: 0,
+      departureReview: false,
       updatedAt: serverTimestamp()
-    });
-
-    // Theo dõi tài liệu đội của chính mình để nhận điểm thay đổi từ đội khác.
-    // Chỉ cập nhật giao diện/state tại đây; không ghi ngược lại Firestore để tránh vòng lặp.
-    onSnapshot(teamRef, (teamSnapshot) => {
-      if (!teamSnapshot.exists()) return;
-      const teamData = teamSnapshot.data();
-      if (typeof window.onRemoteTeamUpdate === "function") {
-        window.onRemoteTeamUpdate(teamData);
-      }
-    }, (error) => {
-      console.error("Lỗi theo dõi dữ liệu đội:", error);
     });
 
     errorEl.textContent =
@@ -367,6 +378,7 @@ window.joinRoom = async function () {
 
       if (status === "finished") {
         errorEl.textContent = "Giáo viên đã kết thúc phòng.";
+        if (!state.gameOver && hasStarted) endGame();
       }
     }, (error) => {
       console.error("Lỗi theo dõi phòng:", error);
@@ -396,46 +408,80 @@ window.syncTeamState = async function (data) {
     console.error("Lỗi cập nhật tiến trình:", error);
   }
 };
+
+// Ghi nhận một lần rời khỏi tab game. Mỗi chu kỳ ẩn trang chỉ tính một lần.
+window.recordGameDeparture = async function () {
+  if (!teamRef || !hasStarted || state.gameOver || departureEventPending) return;
+  departureEventPending = true;
+  try {
+    const result = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(teamRef);
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      const count = (data.departureCount || 0) + 1;
+      const penalty = count === 2 ? 1 : count === 3 ? 3 : 0;
+      const newScore = (data.score || 0) - penalty;
+      transaction.update(teamRef, {
+        departureCount: count,
+        score: newScore,
+        lastDepartureAt: serverTimestamp(),
+        departurePenalty: (data.departurePenalty || 0) + penalty,
+        departureReview: count >= 4,
+        updatedAt: serverTimestamp()
+      });
+      return { count, penalty, newScore };
+    });
+    if (!result) return;
+    departureCount = result.count;
+    state.score = result.newScore;
+    if (result.count === 1) {
+      showDepartureNotice("⚠️ Lần 1: Hệ thống ghi nhận bạn đã rời game.");
+    } else if (result.count === 2) {
+      showDepartureNotice("⚠️ Lần 2: Đội bị trừ 1 điểm.");
+    } else if (result.count === 3) {
+      showDepartureNotice("⚠️ Lần 3: Đội bị trừ 3 điểm.");
+    } else {
+      showDepartureNotice("🚩 Từ lần 4: Giáo viên sẽ xem xét vi phạm.");
+    }
+    updateStats();
+  } catch (error) {
+    console.error("Không ghi nhận được lần rời game:", error);
+    showDepartureNotice("Không thể ghi nhận vi phạm do mất kết nối. Hãy báo giáo viên.");
+  } finally {
+    departureEventPending = false;
+  }
+};
+
+function showDepartureNotice(message) {
+  const el = document.getElementById("departureNotice");
+  if (el) {
+    el.textContent = message;
+    el.classList.remove("hidden");
+  }
+}
+
+// Chỉ dùng visibilitychange để tránh tính nhầm khi người chơi chạm vào nút hoặc bàn phím.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    window.recordGameDeparture();
+  }
+});
 // Lấy danh sách các đội khác trong cùng phòng
 window.getOpponentTeams = async function () {
-  console.log("Mã phòng hiện tại:", currentRoomCode);
-  console.log("ID đội hiện tại:", teamId);
-
-  if (!currentRoomCode || !teamId) {
-    console.error("Thiếu mã phòng hoặc ID đội!");
-    alert("Không xác định được đội hiện tại. Hãy thoát và vào phòng lại!");
-    return [];
-  }
+  if (!currentRoomCode || !teamId) return [];
 
   try {
-    const teamsRef = collection(
-      db,
-      "rooms",
-      currentRoomCode,
-      "teams"
-    );
-
+    const teamsRef = collection(db, "rooms", currentRoomCode, "teams");
     const snapshot = await getDocs(teamsRef);
 
-    console.log("Số đội tìm thấy trong phòng:", snapshot.size);
-    console.log(
-      "Danh sách ID đội:",
-      snapshot.docs.map(teamDoc => teamDoc.id)
-    );
-
-    const opponents = snapshot.docs
+    return snapshot.docs
       .filter(teamDoc => teamDoc.id !== teamId)
       .map(teamDoc => ({
         id: teamDoc.id,
         ...teamDoc.data()
       }));
-
-    console.log("Danh sách đối thủ:", opponents);
-
-    return opponents;
   } catch (error) {
     console.error("Lỗi lấy danh sách đội đối thủ:", error);
-    alert("Không đọc được danh sách đội. Mở Console (F12) để xem lỗi.");
     return [];
   }
 };
@@ -596,38 +642,9 @@ window.useSwapCard = async function () {
     return false;
   }
 };
-// Kiểm tra đội có bị phá hoại hay không
-window.checkSabotageStatus = async function () {
-  if (!teamRef) return false;
-
-  try {
-    const snap = await getDoc(teamRef);
-
-    if (!snap.exists() || !snap.data().sabotagePending) {
-      return false;
-    }
-
-    await updateDoc(teamRef, {
-      sabotagePending: false,
-      updatedAt: serverTimestamp()
-    });
-
-    state.sabotagePending = false;
-    return true;
-
-  } catch (error) {
-    console.error("Không kiểm tra được trạng thái phá hoại:", error);
-    return false;
-  }
-};
 window.useSabotageCard = async function () {
   if (state.specialUsed.sabotage) {
     alert("Đội bạn đã sử dụng thẻ Phá hoại trong ván này!");
-    return false;
-  }
-
-  if (!currentRoomCode || !teamId) {
-    alert("Bạn chưa tham gia phòng!");
     return false;
   }
 
@@ -643,8 +660,7 @@ window.useSabotageCard = async function () {
   });
 
   const choice = prompt(
-    "Chọn đội muốn phá hoại:\n\n" +
-    choices.join("\n") +
+    "Chọn đội muốn phá hoại:\n\n" + choices.join("\n") +
     "\n\nNhập số thứ tự của đội:"
   );
 
@@ -652,56 +668,26 @@ window.useSabotageCard = async function () {
 
   const index = Number(choice) - 1;
 
-  if (
-    !Number.isInteger(index) ||
-    index < 0 ||
-    index >= opponents.length
-  ) {
+  if (!Number.isInteger(index) || index < 0 || index >= opponents.length) {
     alert("Số thứ tự không hợp lệ!");
     return false;
   }
 
   const target = opponents[index];
+  const targetRef = doc(db, "rooms", currentRoomCode, "teams", target.id);
+  const targetScore = Number(target.score) || 0;
 
-  try {
-    const targetRef = doc(
-      db,
-      "rooms",
-      currentRoomCode,
-      "teams",
-      target.id
-    );
+  await updateDoc(targetRef, {
+    score: Math.max(0, targetScore - 5),
+    sabotagePending: true,
+    updatedAt: serverTimestamp()
+  });
 
-    // Đọc lại dữ liệu mới nhất của đội mục tiêu.
-    const targetSnap = await getDoc(targetRef);
+  state.specialUsed.sabotage = true;
 
-    if (!targetSnap.exists()) {
-      alert("Đội được chọn không còn trong phòng!");
-      return false;
-    }
+  alert("💣 Đã phá hoại đội đối thủ! Đội đó bị trừ 5 điểm và phần thưởng câu đúng tiếp theo sẽ bị phá.");
 
-    const targetData = targetSnap.data();
-    const targetScore = Math.max(0, Number(targetData.score) || 0);
-
-    await updateDoc(targetRef, {
-      score: Math.max(0, targetScore - 5),
-      sabotagePending: true,
-      updatedAt: serverTimestamp()
-    });
-
-    state.specialUsed.sabotage = true;
-
-    alert(
-      "💣 Đã phá hoại đội đối thủ! Đội đó bị trừ 5 điểm " +
-      "và phần thưởng câu đúng tiếp theo sẽ bị phá."
-    );
-
-    return true;
-  } catch (error) {
-    console.error("Lỗi sử dụng thẻ Phá hoại:", error);
-    alert("Không thể sử dụng thẻ Phá hoại. Hãy kiểm tra kết nối và quyền Firestore.");
-    return false;
-  }
+  return true;
 };
 </script>
 
@@ -816,8 +802,8 @@ const outcomes = [
 
 const $ = id => document.getElementById(id);
 const state = {
- team:"",score:0,hearts:2,maxHearts:3,shields:0,
- index:0,seconds:20,timer:null,locked:false,
+ team:"",score:0,hearts:3,maxHearts:3,shields:0,
+ index:0,seconds:20,timer:null,timerDeadline:0,locked:false,
  sound:false,gameOver:false,extraUsed:0,flipsLeft:0,
 
  // Theo dõi thẻ đặc biệt đã sử dụng
@@ -829,21 +815,6 @@ const state = {
 
  // Có bị mất điểm thưởng ở câu đúng tiếp theo không?
  sabotagePending:false
-};
-
-// Nhận thay đổi từ Firestore do đội khác gây ra, không ghi ngược điểm cũ lên database.
-window.onRemoteTeamUpdate = function(teamData){
-  if (typeof teamData.score === "number" && teamData.score !== state.score) {
-    state.score = teamData.score;
-    $("scoreDisplay").textContent = "⭐ " + state.score;
-  }
-  if (typeof teamData.hearts === "number") {
-    state.hearts = Math.max(0, Math.min(state.maxHearts, teamData.hearts));
-    $("heartsDisplay").textContent = "❤️".repeat(state.hearts) + "🖤".repeat(state.maxHearts-state.hearts);
-  }
-  if (typeof teamData.sabotagePending === "boolean") {
-    state.sabotagePending = teamData.sabotagePending;
-  }
 };
 
 function updateStats(){
@@ -880,7 +851,7 @@ function startGame(){
 
  state.team=name;
  state.score=0;
- state.hearts=2;
+ state.hearts=3;
  state.maxHearts=3;
  state.shields=0;
 
@@ -915,7 +886,9 @@ function loadQuestion(){
  $("luckyPanel").classList.add("hidden");
  $("questionCard").classList.remove("hidden");
  resetScene();
- state.locked=false;state.seconds=20;state.extraUsed=0;state.flipsLeft=0;
+ state.locked=false;state.seconds=20;state.timerDeadline=Date.now()+20000;state.extraUsed=0;state.flipsLeft=0;
+ const departureNotice=$("departureNotice");
+ if(departureNotice){departureNotice.textContent="";departureNotice.classList.add("hidden");}
  const q=questions[state.index];
  $("questionNumber").textContent=`CÂU ${state.index+1}/10`;
  $("questionText").textContent=q.q;
@@ -935,14 +908,17 @@ function updateTimer(){
  $("timerBar").style.background=state.seconds<=5?"#ff5964":state.seconds<=9?"#ffd166":"#26c281";
 }
 function startTimer(){
+ // Tính theo mốc thời gian tuyệt đối để đồng hồ vẫn trôi khi trình duyệt chạy nền.
+ state.timerDeadline = Date.now() + state.seconds * 1000;
  state.timer=setInterval(()=>{
   if(state.locked||state.gameOver)return;
-  state.seconds--;updateTimer();
+  state.seconds=Math.max(0,Math.ceil((state.timerDeadline-Date.now())/1000));
+  updateTimer();
   if(state.seconds<=0){
    clearTimer();state.locked=true;disableAnswers();
    loseHeart("⏰","HẾT GIỜ! -1 TIM","Bạn đã hết 20 giây. Không được lật thẻ ở câu này.");
   }
- },1000);
+ },250);
 }
 function disableAnswers(){
  [...$("mainAnswers").children].forEach(b=>b.disabled=true);
@@ -1177,6 +1153,9 @@ function nextQuestion(){
 function endGame(){
  if(state.gameOver)return;
  state.gameOver=true;clearTimer();
+ // Gửi trạng thái kết thúc lên màn hình giáo viên.
+ if (state.sound) $("bgMusic").pause();
+ updateStats();
  $("gameScreen").classList.add("hidden");
  $("startScreen").classList.add("hidden");
  $("endScreen").classList.remove("hidden");
@@ -1216,6 +1195,8 @@ $("soundStartBtn").onclick=toggleSound;
 $("soundBtn").onclick=toggleSound;
 $("restartBtn").onclick=()=>{
  clearTimer();state.gameOver=false;
+ if (roomListener) { roomListener(); roomListener = null; }
+ teamRef = null; teamId = ""; currentRoomCode = ""; hasStarted = false;
  $("endScreen").classList.add("hidden");
  $("gameScreen").classList.add("hidden");
  $("startScreen").classList.remove("hidden");
